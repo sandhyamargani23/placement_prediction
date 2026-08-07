@@ -1,0 +1,17 @@
+# PyCharm
+.idea/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Generated datasets
+dataset/*.csv
+
+# Generated EDA outputs
+outputs/EDA_Analysis_outputs/*.png
+outputs/EDA_Analysis_outputs/*.csv
+
+# Keep source code inside outputs if needed
+!outputs/EDA_Analysis_outputs/*.py
