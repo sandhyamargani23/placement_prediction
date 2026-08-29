@@ -33,7 +33,7 @@ from sklearn.metrics import (
 
 
 FILE_NAME ="C:/Users/SANDHYA/PycharmProjects/placement_prediction/dataset/placement_predict_50K_Raw.csv"
-output_folder="C:/Users/SANDHYA/PycharmProjects/placement_predictio/outputs/Regularization_ridg_laso_elastic_outputs"
+output_folder="C:/Users/SANDHYA/PycharmProjects/placement_predictio/outputs/Regularization_ridge_lasso_elastic_outputs"
 TARGET_COLUMN = "PlacementStatus"
 
 
@@ -56,6 +56,10 @@ print(df_original.head())
 print("\nShape:", df_original.shape)
 print("\nColumns:")
 print(df_original.columns.tolist())
+
+
+
+
 
 
 

@@ -1,638 +1,710 @@
+
 import os
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import (
-   mean_squared_error,
-   mean_absolute_error,
-   r2_score
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
+
+
+# ============================================================
+# 1. LOAD DATASET
+# ============================================================
+
+DATA_PATH = (
+"C:/Users/SANDHYA/PycharmProjects/placement_prediction/dataset/placement_predict_50K_Raw.csv"
+)
+
+data = pd.read_csv(DATA_PATH)
+
+print("==========================================")
+print("DATASET INFORMATION")
+print("==========================================")
+print("Dataset shape:", data.shape)
+print("\nColumns:")
+print(data.columns.tolist())
+
+
+# ============================================================
+# 2. CONVERT DATA TO NUMERIC
+# ============================================================
+
+# Convert every column to numeric.
+# Invalid values such as strings become NaN.
+data = data.apply(pd.to_numeric, errors="coerce")
+
+
+# ============================================================
+# 3. CHECK MISSING VALUES
+# ============================================================
+
+print("\n==========================================")
+print("MISSING VALUE CHECK")
+print("==========================================")
+
+missing_values = data.isna().sum()
+
+print(missing_values[missing_values > 0])
+
+if missing_values.sum() > 0:
+    print("\nTotal missing values:", missing_values.sum())
+else:
+    print("No missing values found.")
+
+
+# ============================================================
+# 4. REMOVE ROWS WITH MISSING TARGET
+# ============================================================
+
+# Last column is the target.
+target_column = data.columns[-1]
+
+print("\nTarget column:", target_column)
+
+before_rows = len(data)
+
+data = data.dropna(subset=[target_column])
+
+after_rows = len(data)
+
+print(
+    "Rows removed because target was missing:",
+    before_rows - after_rows
 )
 
 
 # ============================================================
-# 1. FILE PATHS
+# 5. REMOVE INFINITE VALUES
 # ============================================================
 
+data = data.replace([np.inf, -np.inf], np.nan)
 
-DATASET_PATH = "C:/Users/SANDHYA/PycharmProjects/placement_prediction/dataset/placement_predict_50K_Raw.csv"
-
-OUTPUT_FOLDER = "C:/Users/SANDHYA/PycharmProjects/placement_prediction/outputs/Linear_Regression_with_Metrics_M2"
-IMAGE_FOLDER = os.path.join(OUTPUT_FOLDER, "images")
+# Again remove rows where target became NaN
+data = data.dropna(subset=[target_column])
 
 
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# ============================================================
+# 6. EXTRACT FEATURES AND TARGET
+# ============================================================
+
+X = data.iloc[:, :-1].copy()
+y = data.iloc[:, -1].copy()
+
+
+print("\n==========================================")
+print("FEATURE / TARGET INFORMATION")
+print("==========================================")
+
+print("Number of features:", X.shape[1])
+print("Number of samples:", X.shape[0])
+
+
+# ============================================================
+# 7. HANDLE MISSING FEATURE VALUES
+# ============================================================
+
+# Fill missing feature values with column median.
+#
+# This is done BEFORE train-test split only for safety of the
+# complete dataset structure. The actual scaler is fitted only
+# on the training data.
+
+for column in X.columns:
+
+    if X[column].isna().any():
+
+        median_value = X[column].median()
+
+        # If the entire column is NaN, use 0.
+        if pd.isna(median_value):
+            median_value = 0.0
+
+        X[column] = X[column].fillna(median_value)
+
+
+# ============================================================
+# 8. FINAL NaN / INFINITY CHECK
+# ============================================================
+
+X = X.replace([np.inf, -np.inf], np.nan)
+
+# If any NaN remains, replace with zero.
+X = X.fillna(0)
+
+y = y.replace([np.inf, -np.inf], np.nan)
+
+# Remove any remaining invalid target rows.
+valid_rows = y.notna()
+
+X = X.loc[valid_rows]
+y = y.loc[valid_rows]
+
+
+# Convert to NumPy arrays
+X = X.to_numpy(dtype=float)
+y = y.to_numpy(dtype=float)
+
+
+print("\n==========================================")
+print("FINAL DATA CHECK")
+print("==========================================")
+
+print("X shape:", X.shape)
+print("y shape:", y.shape)
+
+print("NaN in X:", np.isnan(X).sum())
+print("NaN in y:", np.isnan(y).sum())
+
+print("Infinity in X:", np.isinf(X).sum())
+print("Infinity in y:", np.isinf(y).sum())
+
+
+# ============================================================
+# 9. CREATE IMAGE OUTPUT FOLDER
+# ============================================================
+
+IMAGE_FOLDER = (
+"C:/Users/SANDHYA/PycharmProjects/placement_prediction"
+    "outputs/Linear_Regression_CFNE_GD_Compare_M2"
+)
+
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
-
-
-
-# ============================================================
-# 2. LOAD DATASET
-# ============================================================
-
-
-if not os.path.exists(DATASET_PATH):
-   raise FileNotFoundError(
-       f"Dataset not found: {DATASET_PATH}"
-   )
-
-
-df = pd.read_csv(DATASET_PATH)
-
-
-print("=" * 60)
-print("LINEAR REGRESSION - PLACEMENT PREDICTION")
-print("=" * 60)
-
-
-print("\nDataset Shape:")
-print(df.shape)
-
-
-print("\nFirst 5 Records:")
-print(df.head())
-
-
+print("\nImage output folder:")
+print(IMAGE_FOLDER)
 
 
 # ============================================================
-# 3. DISPLAY COLUMN NAMES
+# 10. TRAIN-TEST SPLIT
 # ============================================================
-
-
-print("\nDataset Columns:")
-for column in df.columns:
-   print(column)
-
-
-
-
-# ============================================================
-# 4. SELECT FEATURES AND TARGET
-# ============================================================
-
-
-# CHANGE THESE COLUMN NAMES ACCORDING TO YOUR DATASET
-# Multiple Linear Regression x1=CGPA, x2=AptitudeTestScore, x3=CodingTestScore, x4=MockInterviewScore
-feature_columns = [
-   "CGPA",
-   "AptitudeTestScore",
-   "CodingTestScore",
-   "MockInterviewScore"
-]
-
-
-# y=PlacementStatus
-target_column = "PlacementStatus"
-
-
-
-
-# ============================================================
-# 5. CHECK REQUIRED COLUMNS
-# ============================================================
-
-
-required_columns = feature_columns + [target_column]
-
-
-missing_columns = [
-   column
-   for column in required_columns
-   if column not in df.columns
-]
-
-
-if missing_columns:
-   print("\nERROR!")
-   print("The following columns were not found:")
-   print(missing_columns)
-
-
-   print("\nAvailable columns are:")
-   print(list(df.columns))
-
-
-   raise ValueError(
-       "Please change feature_columns and target_column "
-       "according to your dataset."
-   )
-
-
-
-
-# ============================================================
-# 6. CREATE MODEL DATA
-# ============================================================
-
-
-model_df = df[required_columns].copy()
-
-
-# ============================================================
-# 8. DEFINE X AND Y
-# ============================================================
-
-
-X = model_df[feature_columns]
-
-
-y = model_df[target_column]
-
-
-
-
-# ============================================================
-# 9. TRAIN-TEST SPLIT
-# ============================================================
-
 
 X_train, X_test, y_train, y_test = train_test_split(
-   X,
-   y,
-   test_size=0.20,
-   random_state=42
+    X,
+    y,
+    test_size=0.2,
+    random_state=42
 )
 
+print("\n==========================================")
+print("TRAIN TEST SPLIT")
+print("==========================================")
 
-print("\nTraining samples:", len(X_train))
+print("Training samples:", len(X_train))
 print("Testing samples:", len(X_test))
 
 
+# ============================================================
+# 11. FEATURE SCALING
+# ============================================================
+
+scaler = StandardScaler()
+
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
 
 # ============================================================
-# 10. CREATE LINEAR REGRESSION MODEL
+# 12. CLOSED FORM SOLUTION
 # ============================================================
 
+print("\n==========================================")
+print("CLOSED FORM NORMAL EQUATION")
+print("==========================================")
 
-model = LinearRegression()
+# Add bias/intercept column
+X_train_bias = np.c_[
+    np.ones((X_train_scaled.shape[0], 1)),
+    X_train_scaled
+]
 
-
-# ============================================================
-# 11. TRAIN MODEL
-# ============================================================
-
-
-model.fit(X_train, y_train)
-
-
-print("\nModel training completed.")
-
-
-
-
-# ============================================================
-# 12. MODEL COEFFICIENTS
-# ============================================================
-# y=b0+(b1x1)+(b2x2)+(b3x3)+(b4x4)
-print("\nIntercept is b0:")
-print(model.intercept_)
+X_test_bias = np.c_[
+    np.ones((X_test_scaled.shape[0], 1)),
+    X_test_scaled
+]
 
 
-print("\nCoefficients (b1,b2,b3,b4) values:")
-coefficient_df = pd.DataFrame({
-   "Feature": feature_columns,
-   "Coefficient": model.coef_
-})
-print(coefficient_df)
+# ------------------------------------------------------------
+# PSEUDOINVERSE
+# ------------------------------------------------------------
+#
+# Instead of:
+#
+# theta = inv(X.T X) X.T y
+#
+# use:
+#
+# theta = pinv(X) y
+#
+# This is much more stable when columns are correlated or
+# X.T X is singular.
 
-
-
-
-# ============================================================
-# 13. LINEAR REGRESSION EQUATION
-# ============================================================
-
-
-equation = f"{target_column} = {model.intercept_:.4f}"
-
-
-for feature, coefficient in zip(
-       feature_columns,
-       model.coef_):
-
-
-   equation += (
-       f" + ({coefficient:.4f} × {feature})"
-   )
-
-
-print("\nLinear Regression Equation:")
-print(equation)
-
-
+theta_normal = np.linalg.pinv(
+    X_train_bias
+).dot(y_train)
 
 
 # ============================================================
-# 14. PREDICTION
+# 13. NORMAL EQUATION PREDICTION
 # ============================================================
 
-
-y_pred = model.predict(X_test)
-
-
+pred_normal = X_test_bias.dot(theta_normal)
 
 
 # ============================================================
-# 15. EVALUATION
+# 14. NORMAL EQUATION METRICS
 # ============================================================
 
+mse_normal = mean_squared_error(
+    y_test,
+    pred_normal
+)
 
-mae = mean_absolute_error(y_test, y_pred)
-
-
-mse = mean_squared_error(y_test, y_pred)
-
-
-rmse = np.sqrt(mse)
-
-
-r2 = r2_score(y_test, y_pred)
-
-
-print("\n" + "=" * 60)
-print("MODEL EVALUATION")
-print("=" * 60)
-
-
-print(f"MAE  : {mae:.4f}")
-print(f"MSE  : {mse:.4f}")
-print(f"RMSE : {rmse:.4f}")
-print(f"R²   : {r2:.4f}")
-
-
-
-
-# ============================================================
-# 16. CREATE PREDICTION RESULTS
-# ============================================================
-
-
-results = X_test.copy()
-
-
-results["Actual"] = y_test.values
-
-
-results["Predicted"] = y_pred
-
-
-results["Residual"] = (
-   results["Actual"] -
-   results["Predicted"]
+r2_normal = r2_score(
+    y_test,
+    pred_normal
 )
 
 
-results["Absolute_Error"] = abs(
-   results["Residual"]
+print("Coefficients:")
+print(theta_normal)
+
+print("\nMSE:", mse_normal)
+print("R2 Score:", r2_normal)
+
+
+# ============================================================
+# 15. GRADIENT DESCENT
+# ============================================================
+
+print("\n==========================================")
+print("GRADIENT DESCENT")
+print("==========================================")
+
+
+X_train_gd = np.c_[
+    np.ones((X_train_scaled.shape[0], 1)),
+    X_train_scaled
+]
+
+X_test_gd = np.c_[
+    np.ones((X_test_scaled.shape[0], 1)),
+    X_test_scaled
+]
+
+
+# Number of training samples
+m = len(y_train)
+
+
+# Initialize parameters
+theta_gd = np.zeros(
+    X_train_gd.shape[1],
+    dtype=float
 )
 
 
+# Learning rate
+learning_rate = 0.01
+
+
+# Number of iterations
+epochs = 1000
+
+
+# Store loss for every epoch
+loss_history = []
 
 
 # ============================================================
-# 17. SAVE PREDICTION RESULTS
+# 16. GRADIENT DESCENT ITERATIONS
 # ============================================================
 
+for epoch in range(epochs):
 
-prediction_file = os.path.join(
-   OUTPUT_FOLDER,
-   "linear_regression_predictions.csv"
+    # --------------------------------------------------------
+    # Prediction
+    # --------------------------------------------------------
+
+    predictions = X_train_gd.dot(theta_gd)
+
+
+    # --------------------------------------------------------
+    # Error
+    # --------------------------------------------------------
+
+    errors = predictions - y_train
+
+
+    # --------------------------------------------------------
+    # Gradient
+    # --------------------------------------------------------
+
+    gradients = (
+        (2.0 / m)
+        * X_train_gd.T.dot(errors)
+    )
+
+
+    # --------------------------------------------------------
+    # Update parameters
+    # --------------------------------------------------------
+
+    theta_gd -= (
+        learning_rate * gradients
+    )
+
+
+    # --------------------------------------------------------
+    # Calculate current MSE
+    # --------------------------------------------------------
+
+    current_predictions = X_train_gd.dot(theta_gd)
+
+    loss = np.mean(
+        (current_predictions - y_train) ** 2
+    )
+
+
+    loss_history.append(loss)
+
+
+# ============================================================
+# 17. GRADIENT DESCENT PREDICTION
+# ============================================================
+
+pred_gd = X_test_gd.dot(theta_gd)
+
+
+# ============================================================
+# 18. GRADIENT DESCENT METRICS
+# ============================================================
+
+mse_gd = mean_squared_error(
+    y_test,
+    pred_gd
+)
+
+r2_gd = r2_score(
+    y_test,
+    pred_gd
 )
 
 
-results.to_csv(
-   prediction_file,
-   index=False
-)
+print("Coefficients:")
+print(theta_gd)
 
-
-print("\nPrediction results saved to:")
-print(prediction_file)
-
-
+print("\nMSE:", mse_gd)
+print("R2 Score:", r2_gd)
 
 
 # ============================================================
-# 18. SAVE MODEL COEFFICIENTS
+# 19. COMPARISON
 # ============================================================
 
+print("\n==========================================")
+print("FINAL COMPARISON")
+print("==========================================")
 
-coefficient_file = os.path.join(
-   OUTPUT_FOLDER,
-   "linear_regression_coefficients.csv"
-)
+print("\nNormal Equation")
+print("----------------------------")
+print("MSE =", mse_normal)
+print("R2  =", r2_normal)
 
-
-coefficient_df.to_csv(
-   coefficient_file,
-   index=False
-)
-
-
-
-
-# ============================================================
-# 19. SAVE MODEL METRICS
-# ============================================================
-
-
-metrics_df = pd.DataFrame({
-   "Metric": [
-       "MAE",
-       "MSE",
-       "RMSE",
-       "R2"
-   ],
-   "Value": [
-       mae,
-       mse,
-       rmse,
-       r2
-   ]
-})
-
-
-metrics_file = os.path.join(
-   OUTPUT_FOLDER,
-   "linear_regression_metrics.csv"
-)
-
-
-metrics_df.to_csv(
-   metrics_file,
-   index=False
-)
-
-
+print("\nGradient Descent")
+print("----------------------------")
+print("MSE =", mse_gd)
+print("R2  =", r2_gd)
 
 
 # ============================================================
-# 20. ACTUAL VS PREDICTED GRAPH
+# 20. IMAGE 1
+# ACTUAL VS PREDICTED VALUES
 # ============================================================
-
 
 plt.figure(figsize=(8, 6))
 
 
 plt.scatter(
-   y_test,
-   y_pred,
-   alpha=0.6
+    y_test,
+    pred_normal,
+    alpha=0.5,
+    label="Normal Equation"
+)
+
+
+plt.scatter(
+    y_test,
+    pred_gd,
+    alpha=0.5,
+    label="Gradient Descent"
 )
 
 
 # Perfect prediction line
-
-
 minimum = min(
-   y_test.min(),
-   y_pred.min()
+    y_test.min(),
+    pred_normal.min(),
+    pred_gd.min()
 )
 
-
 maximum = max(
-   y_test.max(),
-   y_pred.max()
+    y_test.max(),
+    pred_normal.max(),
+    pred_gd.max()
 )
 
 
 plt.plot(
-   [minimum, maximum],
-   [minimum, maximum],
-   linestyle="--"
+    [minimum, maximum],
+    [minimum, maximum],
+    linestyle="--",
+    label="Perfect Prediction"
 )
 
 
-plt.xlabel("Actual placement")
-
-
-plt.ylabel("Predicted placement")
-
+plt.xlabel("Actual Values")
+plt.ylabel("Predicted Values")
 
 plt.title(
-   "Linear Regression: Actual vs Predicted placement"
+    "Actual vs Predicted Values"
 )
 
-
+plt.legend()
 plt.grid(True)
 
+plt.tight_layout()
 
-actual_predicted_image = os.path.join(
-   IMAGE_FOLDER,
-   "actual_vs_predicted.png"
+
+image1 = os.path.join(
+    IMAGE_FOLDER,
+    "actual_vs_predicted.png"
 )
 
 
 plt.savefig(
-   actual_predicted_image,
-   dpi=300,
-   bbox_inches="tight"
+    image1,
+    dpi=300,
+    bbox_inches="tight"
 )
-
 
 plt.close()
 
 
+print("\nImage saved:")
+print(image1)
 
 
 # ============================================================
-# 21. RESIDUAL GRAPH
+# 21. IMAGE 2
+# RESIDUAL COMPARISON
 # ============================================================
 
+normal_residuals = (
+    y_test - pred_normal
+)
 
-plt.figure(figsize=(8, 6))
+gd_residuals = (
+    y_test - pred_gd
+)
+
+
+plt.figure(figsize=(9, 6))
 
 
 plt.scatter(
-   y_pred,
-   results["Residual"],
-   alpha=0.6
+    pred_normal,
+    normal_residuals,
+    alpha=0.5,
+    label="Normal Equation"
+)
+
+
+plt.scatter(
+    pred_gd,
+    gd_residuals,
+    alpha=0.5,
+    label="Gradient Descent"
 )
 
 
 plt.axhline(
-   y=0,
-   linestyle="--"
+    y=0,
+    linestyle="--"
 )
 
 
-plt.xlabel("Predicted Placement")
+plt.xlabel(
+    "Predicted Values"
+)
 
-
-plt.ylabel("Residual")
-
+plt.ylabel(
+    "Residuals"
+)
 
 plt.title(
-   "Residual Plot - Linear Regression"
+    "Residual Comparison"
 )
 
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+
+
+image2 = os.path.join(
+    IMAGE_FOLDER,
+    "residual_comparison.png"
+)
+
+
+plt.savefig(
+    image2,
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+
+print("Image saved:")
+print(image2)
+
+
+# ============================================================
+# 22. IMAGE 3
+# GRADIENT DESCENT LOSS CURVE
+# ============================================================
+
+plt.figure(figsize=(9, 6))
+
+
+plt.plot(
+    range(1, epochs + 1),
+    loss_history
+)
+
+
+plt.xlabel(
+    "Epoch"
+)
+
+plt.ylabel(
+    "Mean Squared Error"
+)
+
+plt.title(
+    "Gradient Descent Convergence"
+)
 
 plt.grid(True)
 
+plt.tight_layout()
 
-residual_image = os.path.join(
-   IMAGE_FOLDER,
-   "residual_plot.png"
+
+image3 = os.path.join(
+    IMAGE_FOLDER,
+    "gradient_descent_loss.png"
 )
 
 
 plt.savefig(
-   residual_image,
-   dpi=300,
-   bbox_inches="tight"
+    image3,
+    dpi=300,
+    bbox_inches="tight"
 )
-
 
 plt.close()
 
 
+print("Image saved:")
+print(image3)
 
 
 # ============================================================
-# 22. COEFFICIENT GRAPH
+# 23. SAVE IMAGE INFORMATION
 # ============================================================
 
+image_info = pd.DataFrame({
 
-plt.figure(figsize=(10, 6))
+    "Image": [
+        "actual_vs_predicted.png",
+        "residual_comparison.png",
+        "gradient_descent_loss.png"
+    ],
+
+    "Description": [
+        "Actual values versus predictions from both methods",
+        "Residual comparison between Normal Equation and Gradient Descent",
+        "MSE loss across Gradient Descent epochs"
+    ]
+})
 
 
-plt.bar(
-   coefficient_df["Feature"],
-   coefficient_df["Coefficient"]
+image_info.to_csv(
+    os.path.join(
+        IMAGE_FOLDER,
+        "image_information.csv"
+    ),
+    index=False
 )
-
-
-plt.xlabel("Features")
-
-
-plt.ylabel("Coefficient")
-
-
-plt.title(
-   "Linear Regression Feature Coefficients"
-)
-
-
-plt.xticks(
-   rotation=30,
-   ha="right"
-)
-
-
-plt.grid(
-   axis="y"
-)
-
-
-coefficient_image = os.path.join(
-   IMAGE_FOLDER,
-   "feature_coefficients.png"
-)
-
-
-plt.savefig(
-   coefficient_image,
-   dpi=300,
-   bbox_inches="tight"
-)
-
-
-plt.close()
-
-
 
 
 # ============================================================
-# 23. SAVE EQUATION
+# 24. SAVE MODEL COMPARISON
 # ============================================================
 
+comparison = pd.DataFrame({
 
-equation_file = os.path.join(
-   OUTPUT_FOLDER,
-   "linear_regression_equation.txt"
+    "Method": [
+        "Normal Equation",
+        "Gradient Descent"
+    ],
+
+    "MSE": [
+        mse_normal,
+        mse_gd
+    ],
+
+    "R2 Score": [
+        r2_normal,
+        r2_gd
+    ]
+})
+
+
+comparison.to_csv(
+    os.path.join(
+        IMAGE_FOLDER,
+        "model_comparison.csv"
+    ),
+    index=False
 )
 
 
-with open(
-   equation_file,
-   "w",
-   encoding="utf-8"
-) as file:
-
-
-   file.write(
-       "Linear Regression Equation\n"
-   )
-
-
-   file.write(
-       "=" * 40 + "\n"
-   )
-
-
-   file.write(
-       equation
-   )
-
-
-
-
 # ============================================================
-# 24. FINAL OUTPUT
+# 25. FINAL MESSAGE
 # ============================================================
 
-
-print("\n" + "=" * 60)
+print("\n==========================================")
 print("PROCESS COMPLETED SUCCESSFULLY")
-print("=" * 60)
+print("==========================================")
 
+print("\nAll images are stored in ONE folder:")
 
-print("\nOutput Folder:")
-print(OUTPUT_FOLDER)
+print(IMAGE_FOLDER)
 
+print("\nGenerated files:")
 
-print("\nGenerated Files:")
+print("1. actual_vs_predicted.png")
+print("2. residual_comparison.png")
+print("3. gradient_descent_loss.png")
+print("4. image_information.csv")
+print("5. model_comparison.csv")
 
+print("\nOriginal dataset was NOT modified.")
 
-print(
-   "- linear_regression_predictions.csv"
-)
-
-
-print(
-   "- linear_regression_coefficients.csv"
-)
-
-
-print(
-   "- linear_regression_metrics.csv"
-)
-
-
-print(
-   "- linear_regression_equation.txt"
-)
-
-
-print("\nGenerated Images:")
-
-
-print(
-   "- actual_vs_predicted.png"
-)
-
-
-print(
-   "- residual_plot.png"
-)
-
-
-print(
-   "- feature_coefficients.png"
-)
+print("\n==========================================")
+print("END")
+print("==========================================")

@@ -5,94 +5,185 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-# Ensure the output directory exists
+# =============================================================
+# 1. SET PATHS
+# =============================================================
+
+dataset_path = "C:/Users/SANDHYA/PycharmProjects/placement_prediction/dataset/placement_predict_50K_Raw.csv"
+
 output_dir = "C:/Users/SANDHYA/PycharmProjects/placement_prediction/outputs/EDA_Analysis_outputs"
 
-# Create output folder"
+
+# Create output directory
 os.makedirs(output_dir, exist_ok=True)
 
 
-# -------------------------------------------------------------
-# 1. Load placement_predict_50k Dataset
-# -------------------------------------------------------------
+# =============================================================
+# 2. LOAD DATASET
+# =============================================================
+
+df = pd.read_csv(dataset_path)
+
+print("==============================================")
+print("Dataset Loaded Successfully")
+print("==============================================")
+print("Dataset Shape:", df.shape)
+print("\nColumn Names:")
+print(df.columns.tolist())
 
 
-df = pd.read_csv("'C:/Users/SANDHYA/PycharmProjects/placement_prediction/dataset/placement_predict_50K_Raw.csv'")
+# =============================================================
+# 3. SELECT NUMERICAL COLUMNS
+# =============================================================
 
-
-print("Dataset Loaded Successfully. Shape:", df.shape)
-
-
-# -------------------------------------------------------------
-# 2. Compute Correlation Matrix & Generate Heatmap
-# -------------------------------------------------------------
-# Select only numerical columns for correlation
 numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+print("\n==============================================")
+print("Numerical Columns")
+print("==============================================")
+print(numerical_cols)
+
+
+# =============================================================
+# 4. CORRELATION MATRIX
+# =============================================================
+
 corr_matrix = df[numerical_cols].corr()
 
-
-# Print matrix to terminal
-print("\n--- Correlation Matrix ---")
+print("\n==============================================")
+print("Correlation Matrix")
+print("==============================================")
 print(corr_matrix)
 
 
-# Create Heatmap
-plt.figure(figsize=(8, 6))
+# =============================================================
+# 5. CORRELATION HEATMAP
+# =============================================================
+
+plt.figure(figsize=(10, 8))
+
 sns.heatmap(
-   corr_matrix,
-   annot=True,
-   cmap="coolwarm",# from blue (cool) through white red (warm)
-   fmt=".2f",
-   vmin=-1,
-   vmax=1,
-   square=True,
-   linewidths=0.5
+    corr_matrix,
+    annot=True,
+    cmap="coolwarm",
+    fmt=".2f",
+    vmin=-1,
+    vmax=1,
+    square=True,
+    linewidths=0.5
 )
-plt.title("Correlation Heatmap of Numerical Features", fontsize=14, fontweight="bold")
+
+plt.title(
+    "Correlation Heatmap of Numerical Features",
+    fontsize=14,
+    fontweight="bold"
+)
+
 plt.tight_layout()
 
 
-# Export Heatmap
-heatmap_path = os.path.join(output_dir, "correlation_heatmap.png")
-plt.savefig(heatmap_path, dpi=300)
+# Save heatmap
+heatmap_path = os.path.join(
+    output_dir,
+    "correlation_heatmap.png"
+)
+
+plt.savefig(
+    heatmap_path,
+    dpi=300,
+    bbox_inches="tight"
+)
+
 plt.close()
-print(f"Exported heatmap to: {heatmap_path}")
+
+print("\nCorrelation heatmap exported to:")
+print(heatmap_path)
 
 
-# -------------------------------------------------------------
-# 3. Produce Boxplots: Numerical Features vs PlacementStatus
-# -------------------------------------------------------------
+# =============================================================
+# 6. BOXPLOTS: NUMERICAL FEATURES VS PLACEMENT STATUS
+# =============================================================
+
 target_col = "PlacementStatus"
 
 
 if target_col in df.columns:
-   for col in numerical_cols:
-       plt.figure(figsize=(6, 5))
-       sns.boxplot(
-           x=target_col,
-           y=col,
-           data=df,
-           palette="Set2",
-           hue=target_col,  # Prevents future deprecation warnings
-           legend=False
-       )
-       plt.title(f"{col} vs {target_col}", fontsize=12, fontweight="bold")
-       plt.xlabel(target_col)
-       plt.ylabel(col)
-       plt.tight_layout()
+
+    print("\n==============================================")
+    print("Generating Boxplots")
+    print("==============================================")
+
+    for col in numerical_cols:
+
+        # Do not create a boxplot of PlacementStatus against itself
+        if col == target_col:
+            continue
+
+        plt.figure(figsize=(6, 5))
+
+        sns.boxplot(
+            x=target_col,
+            y=col,
+            data=df,
+            hue=target_col,
+            palette="Set2",
+            legend=False
+        )
+
+        plt.title(
+            f"{col} vs {target_col}",
+            fontsize=12,
+            fontweight="bold"
+        )
+
+        plt.xlabel(target_col)
+        plt.ylabel(col)
+
+        plt.tight_layout()
 
 
-       # Export individual boxplot
-       boxplot_filename = f"boxplot_{col}_vs_{target_col}.png"
-       boxplot_path = os.path.join(output_dir, boxplot_filename)
-       plt.savefig(boxplot_path, dpi=300)
-       plt.close()
-       print(f"Exported boxplot to: {boxplot_path}")
+        # File name
+        boxplot_filename = (
+            f"boxplot_{col}_vs_{target_col}.png"
+        )
+
+        boxplot_path = os.path.join(
+            output_dir,
+            boxplot_filename
+        )
+
+
+        # Save boxplot
+        plt.savefig(
+            boxplot_path,
+            dpi=300,
+            bbox_inches="tight"
+        )
+
+        plt.close()
+
+        print(f"Exported: {boxplot_filename}")
+
+
 else:
-   print(f"\nTarget column '{target_col}' not found in dataset. Skipping boxplots.")
+
+    print("\nWARNING:")
+    print(
+        f"Target column '{target_col}' "
+        "was not found in the dataset."
+    )
+
+    print("\nAvailable columns are:")
+    print(df.columns.tolist())
 
 
-print("\nAll EDA tasks completed successfully!")
+# =============================================================
+# 7. COMPLETION MESSAGE
+# =============================================================
 
+print("\n==============================================")
+print("ALL EDA TASKS COMPLETED SUCCESSFULLY!")
+print("==============================================")
 
-
+print("\nOutput files are saved in:")
+print(output_dir)
